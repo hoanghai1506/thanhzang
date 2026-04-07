@@ -1,0 +1,6 @@
+streamlit
+gTTS
+pypinyin
+deep-translator
+pandas
+openpyxl
