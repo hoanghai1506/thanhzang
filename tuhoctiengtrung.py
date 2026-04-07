@@ -138,9 +138,8 @@ with t_add:
                 time.sleep(2); st.rerun()
             except Exception as e:
                 st.error(f"Có lỗi xảy ra. Chi tiết: {e}")
-
 # ==========================================
-# TAB 2: QUẢN LÝ
+# TAB 2: QUẢN LÝ (CÓ TÌM KIẾM, BỘ ĐẾM & PHÂN TRANG)
 # ==========================================
 with t_manage:
     st.markdown("<h3>KHO TỪ VỰNG</h3>", unsafe_allow_html=True)
@@ -160,31 +159,63 @@ with t_manage:
         
     conn.close()
 
-    if not rows: st.warning("Không tìm thấy từ vựng nào phù hợp!")
-    
-    for r in rows:
-        c1, c2, c3, c4, c5 = st.columns([0.5, 3.5, 1, 1, 1])
-        is_checked = c1.checkbox("", key=f"chk_{r[0]}", value=(r[0] in st.session_state.selected_ids))
-        if is_checked and r[0] not in st.session_state.selected_ids: st.session_state.selected_ids.append(r[0])
-        elif not is_checked and r[0] in st.session_state.selected_ids: st.session_state.selected_ids.remove(r[0])
-            
-        c2.write(f"**{r[1]}** [{r[2]}] - {r[3]}")
+    if not rows: 
+        st.warning("Không tìm thấy từ vựng nào phù hợp!")
+    else:
+        # --- TÍNH NĂNG PHÂN TRANG CHỐNG LAG ---
+        ITEMS_PER_PAGE = 10
+        total_pages = (len(rows) - 1) // ITEMS_PER_PAGE + 1
         
-        if c3.button("🔊", key=f"play_{r[0]}"): render_audio(r[1], auto_play_on_desktop=True)
-        if c4.button("Sửa", key=f"edit_{r[0]}"): st.session_state.edit_id = r[0]
-        if c5.button("Xóa", key=f"del_{r[0]}"):
-            conn = sqlite3.connect('chinese_web.db')
-            conn.execute("DELETE FROM vocab WHERE id=?", (r[0],))
-            conn.commit(); conn.close(); st.rerun()
+        if 'current_page' not in st.session_state: 
+            st.session_state.current_page = 1
+            
+        # Đảm bảo trang hiện tại không vượt quá tổng số trang khi tìm kiếm
+        if st.session_state.current_page > total_pages:
+            st.session_state.current_page = 1
 
-        if st.session_state.edit_id == r[0]:
-            new_mean = st.text_input("Nhập nghĩa mới:", value=r[3], key=f"new_m_{r[0]}")
-            if st.button("Lưu thay đổi", key=f"save_{r[0]}"):
-                conn = sqlite3.connect('chinese_web.db')
-                conn.execute("UPDATE vocab SET meaning=? WHERE id=?", (new_mean, r[0]))
-                conn.commit(); conn.close()
-                st.session_state.edit_id = None; st.rerun()
+        # Nút điều hướng phân trang
+        col_prev, col_page, col_next = st.columns([1, 2, 1])
+        with col_prev:
+            if st.button("⬅️ Trang trước", use_container_width=True, disabled=(st.session_state.current_page == 1)):
+                st.session_state.current_page -= 1
+                st.rerun()
+        with col_page:
+            st.markdown(f"<h4 style='text-align: center; margin-top: 10px;'>Trang {st.session_state.current_page} / {total_pages}</h4>", unsafe_allow_html=True)
+        with col_next:
+            if st.button("Trang sau ➡️", use_container_width=True, disabled=(st.session_state.current_page == total_pages)):
+                st.session_state.current_page += 1
+                st.rerun()
+
         st.divider()
+
+        # Chỉ trích xuất dữ liệu của trang hiện tại để hiển thị
+        start_idx = (st.session_state.current_page - 1) * ITEMS_PER_PAGE
+        end_idx = start_idx + ITEMS_PER_PAGE
+        current_rows = rows[start_idx:end_idx]
+    
+        for r in current_rows:
+            c1, c2, c3, c4, c5 = st.columns([0.5, 3.5, 1, 1, 1])
+            is_checked = c1.checkbox("", key=f"chk_{r[0]}", value=(r[0] in st.session_state.selected_ids))
+            if is_checked and r[0] not in st.session_state.selected_ids: st.session_state.selected_ids.append(r[0])
+            elif not is_checked and r[0] in st.session_state.selected_ids: st.session_state.selected_ids.remove(r[0])
+                
+            c2.write(f"**{r[1]}** [{r[2]}] - {r[3]}")
+            
+            if c3.button("🔊", key=f"play_{r[0]}"): render_audio(r[1], auto_play_on_desktop=True)
+            if c4.button("Sửa", key=f"edit_{r[0]}"): st.session_state.edit_id = r[0]
+            if c5.button("Xóa", key=f"del_{r[0]}"):
+                conn = sqlite3.connect('chinese_web.db')
+                conn.execute("DELETE FROM vocab WHERE id=?", (r[0],))
+                conn.commit(); conn.close(); st.rerun()
+
+            if st.session_state.edit_id == r[0]:
+                new_mean = st.text_input("Nhập nghĩa mới:", value=r[3], key=f"new_m_{r[0]}")
+                if st.button("Lưu thay đổi", key=f"save_{r[0]}"):
+                    conn = sqlite3.connect('chinese_web.db')
+                    conn.execute("UPDATE vocab SET meaning=? WHERE id=?", (new_mean, r[0]))
+                    conn.commit(); conn.close()
+                    st.session_state.edit_id = None; st.rerun()
+            st.divider()
 
 # ==========================================
 # TAB 3: LUYỆN NÓI (SHADOWING)
